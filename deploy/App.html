@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>rallymonthlyteamreport</title>
+
+    <script type="text/javascript" src="/apps/2.0rc2/sdk.js"></script>
+
+    <script type="text/javascript">
+        Rally.onReady(function () {
+                Ext.define("CustomApp",{extend:"Rally.app.App",componentCls:"app",items:[{xtype:"container",itemId:"filter-pulldown-container",layout:{type:"hbox"}}],launch:function(){console.log("Calling _loadMonthPulldown"),this._loadMonthPulldown(),this._loadTeamsPulldown()},_loadMonthPulldown:function(){},_loadTeamsPulldown:function(){var teamCombobox=Ext.create("Rally.ui.combobox.ComboBox",{itemId:"team-combobox",fieldLabel:"Team",labelAlign:"right",width:300,storeConfig:{autoLoad:!0,model:"Project",filters:[{property:"Name",operator:"!contains",value:"Deprecated"}]},listeners:{select:this._onTeamSelected,scope:this}});this.down("#filter-pulldown-container").add(teamCombobox)},_onTeamSelected:function(combo,records){console.log(records[0]+" team was selected"),console.log("team was selected",records[0],combo),console.log("%s team was selected",records[0]),console.log("%s team was selected",records[0].get("Name"))}});
+
+            Rally.launchApp('CustomApp', {
+                name:"rallymonthlyteamreport",
+	            parentRepos:""
+            });
+
+        });
+    </script>
+
+
+    <style type="text/css">
+        .app {
+     /* Add app styles here */
+}
+
+    </style>
+</head>
+<body></body>
+</html>

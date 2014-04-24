@@ -8,8 +8,12 @@ Ext.define('CustomApp', {
             itemId: 'filter-pulldown-container', //just a programming convenience to find an item
             layout: {
                 type: 'hbox', //horizontal box
-            
             }
+        },
+        {
+            xtype: 'container',
+            itemId: 'grid-container',
+            margin: '0 0 0 50'   // top, right, bottom, left
         }
         ],
     launch: function() {
@@ -169,6 +173,7 @@ Ext.define('CustomApp', {
             context: {
               project: this.selectedTeam    // ODD: not setting specific project becomes greedy for single iteration that shares a name with several projects ?!?!?
             },
+            fetch: ['Feature', 'Name', 'Notes', 'PercentDoneByStoryPlanEstimate', 'Parent'],
             filters: [iterationFilters],
             listeners : {
                 load : this._onStoriesLoaded,
@@ -176,10 +181,119 @@ Ext.define('CustomApp', {
             }
         });
     },
-    _onStoriesLoaded : function(store, records, success) {
-        console.log('got %i stories', records.length);
-        _.each(records, function(record) {
-                            console.log("%s - %s", record.get('Iteration')["Name"], record.get('Name'));
+    _onStoriesLoaded : function(store, storyRecords, success) {
+        console.log('got %i stories', storyRecords.length);
+        this._getUniqueFeatures(storyRecords);
+    },
+    _getUniqueFeatures : function(storyRecords) {
+        var featureList = {};
+        _.each(storyRecords, function(record) {
+                            console.log("%s", record.get('Name'), record );
+                var feature = record.get('Feature');
+                
+                if (feature === null) {
+                    featureRef = "NoFeature";
+                    featureList[featureRef] = { "Name": "No Feature Assigned" }
+                } else {
+                    var featureRef = feature["_ref"];
+                    featureList[featureRef] = feature;
+                }
+                
+                console.log(featureRef, feature, featureList);
             });
-    }
+         
+         this._getUniquePrograms(featureList);   
+    },
+    _getUniquePrograms : function(featureList) {
+        console.log("_getUniquePrograms is running");
+        var featureKeys = _.keys(featureList); //Get array of unique feature reference key.
+        console.log("%s features found", featureKeys.length);
+        var programList = {};
+        _.each(featureKeys, function(featureKey) { 
+            var program = featureList[featureKey].Parent;
+            console.log(featureList[featureKey], ' from program ' , program);
+            //put a key value into a unique list of programs
+            if (program == null)
+            {
+                programRef = "NoProgram";
+                programList[programRef] = { "Name": "No Program Assigned"}
+            }
+            else
+            {
+                programRef = program['_ref'];
+                programList[programRef] = program;
+            }
+            
+        });
+        
+        console.log('Program List: ', programList);
+        this._loadView(featureList, programList);
+        
+        
+    },
+    _loadView : function(featureList, programList) {
+        //console.log(featureList, programList);
+        
+        featureRows = [];
+        _.each(_.keys(featureList), function(featureKey) {
+                feature = featureList[featureKey];
+
+                var programName;
+                
+                if (feature.Parent === undefined) {
+                    programName = "No Program";
+                } else {
+                    programName = feature.Parent.Name;
+                }
+                
+                var featureNotes = (feature.Notes === undefined)? "" : feature.Notes;
+console.log("GOT!", feature, feature.Name);
+                featureRows.push({ 'program': programName, 'feature': feature.Name, 'overallProgress': feature.PercentDoneByStoryPlanEstimate, 'notes': featureNotes});
+        });
+        
+          // Set up a model to use in our Store
+        Ext.define('ReportModel', {
+            extend: 'Ext.data.Model',
+            fields: [
+                {name: 'program', type: 'string'},
+                {name: 'feature',  type: 'string'},
+                {name: 'notes',    type: 'string'},
+                {name: 'overallProgress', type: 'string'}
+            ]});
+
+        var myStore = Ext.create('Ext.data.Store', {
+            model: 'ReportModel',
+            data: featureRows
+            });
+
+        if (this.grid !== undefined)
+        {
+         this.grid.destroy();   
+        }
+         this.grid = Ext.create('Rally.ui.grid.Grid', {
+                        title: 'Montly Team Report',
+                        itemId: 'featuresGrid',
+                        columnLines: true,
+                        header: false,
+                        showRowActionsColumn: false,
+                        store: myStore,
+                        width: 1000,
+                        border: 1,
+                        columnCfgs: [
+							{ text: 'Program', dataIndex: 'program', sortable: true,   flex: 2 },							
+							{ text: 'Feature', dataIndex:'feature', sortable: true,   flex: 2 },
+							{ text: 'Overall Progress', dataIndex:'overallProgress', flex: 1, renderer: this._renderOverallProgress, scope: this, sortable: true,   width: 50 },
+							{ text: 'Notes', dataIndex:'notes', sortable: false,   flex: 5 },
+                        ],
+                        viewConfig: {
+                            enableTextSelection: true
+                        }
+                    });
+        this.down('#grid-container').add(this.grid);
+    },
+    _renderOverallProgress: function(value, metaData, record, rowIndex, colIndex, store, view) {
+                    var percentValue = (value * 100).toFixed(2);
+                    
+                    return Ext.String.format("{0}", percentValue);	
+		        },
 });

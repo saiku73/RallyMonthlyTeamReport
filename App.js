@@ -56,6 +56,9 @@ Ext.define('CustomApp', {
     },
     _onMonthSelected: function(combo, records) {
         console.log('selected month', records[0].get('startDate'), records[0].get('endDate'));
+        this.selectedStartDate = records[0].get('startDate');
+        this.selectedEndDate = records[0].get('endDate');
+        this._fetchIterations();
     },
     _loadTeamsPulldown : function() {
         var teamCombobox = Ext.create('Rally.ui.combobox.ComboBox', {
@@ -86,6 +89,97 @@ Ext.define('CustomApp', {
     _onTeamSelected : function(combo, records) {
         console.log('%s team was selected', records[0]); //Use this if you don't know what properties u want. It will pretty print in the console.
         console.log('%s team was selected', records[0].get('Name'));
+        console.log(records[0]);
+        this.selectedTeam = records[0].get('_ref'); //You may think you should use the Name property. You will be wrong.
+        this._fetchIterations();
+    },
+    _fetchIterations : function()
+    {
+        Ext.create('Rally.data.wsapi.Store', {
+            //configuration object
+            model: 'Iteration',
+            filters: [
+                {
+                //Iteration Start Date >= Month Start Date and Iteration End Date <= Month End Date
+                property: 'StartDate',
+                operator: '>=',
+                value: this.selectedStartDate
+                },
+                {
+                    property: 'EndDate',
+                    operator: '<=',
+                    value: this.selectedEndDate
+                },
+                {
+                    property: 'Project', //selected team ref. 
+                    operator: '=',
+                    value: this.selectedTeam
+                }
+                ],
+            autoLoad: true,
+            listeners: {
+                load: this._onIterationsLoaded,
+                scope: this
+            }
+        });
+    },
+    _onIterationsLoaded : function(store, records, successful)
+    {
+        console.log('got iterations',records);
+        //Using Lo-Dash library here. It's a useful lib for data analysis
+        //lodash.com/docs#forEach
+        this.Iterations = records;
+        //_.each(records,function(record) {console.log('%s %s %s',record.get('Name'),record.get('StartDate'),record.get('EndDate'))});
+        this._loadStories();
         
+    },
+    _loadStories : function() {
+        console.log('Loading stories');
+        
+        var iterationFilters = null;
+        
+        // no stories in iteration, this report is of no use!   TODO: display a message 
+        if (this.Iterations.length === 0) {
+            return;
+        }
+        
+
+        var iterFilter1 = Ext.create('Rally.data.wsapi.Filter', {
+                property: 'Iteration',
+                operator: '=',
+                value: this.Iterations[0].get('_ref')
+            });
+        iterationFilters = iterFilter1;
+        
+        // TODO: loop through iterations and dynamically create OR logic
+        if (this.Iterations.length > 1) {
+        var iterFilter2 = Ext.create('Rally.data.wsapi.Filter', {
+                property: 'Iteration',
+                operator: '=',
+                value: this.Iterations[1].get('_ref')
+            });
+            iterationFilters = iterFilter1.or(iterFilter2);
+        }
+        
+        console.log('iteration filters', iterationFilters.toString());
+        
+        Ext.create('Rally.data.wsapi.Store' , {
+            model : 'User Story' , //This is called "HierarchicalRequirement" in the rally docs ! - Gotcha
+            autoLoad: true,
+            context: {
+              project: this.selectedTeam    // ODD: not setting specific project becomes greedy for single iteration that shares a name with several projects ?!?!?
+            },
+            filters: [iterationFilters],
+            listeners : {
+                load : this._onStoriesLoaded,
+                scope: this //tells the runtime to use the parent "customapp" scope.
+            }
+        });
+    },
+    _onStoriesLoaded : function(store, records, success) {
+        console.log('got %i stories', records.length);
+        _.each(records, function(record) {
+                            console.log("%s - %s", record.get('Iteration')["Name"], record.get('Name'));
+            });
     }
 });
